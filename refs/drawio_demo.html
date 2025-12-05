@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Draw.io Code-Graph Sync</title>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        #editor-container { width: 40%; height: 100%; border-right: 2px solid #ddd; }
+        #diagram-container { width: 60%; height: 100%; background: #f0f0f0; }
+        iframe { width: 100%; height: 100%; border: none; display: block; }
+        .loading-tip { position: absolute; right: 20px; top: 20px; z-index: 0; color: #666; }
+    </style>
+    <!-- 引入 Monaco Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.js"></script>
+</head>
+<body>
+
+<div id="editor-container"></div>
+<div id="diagram-container">
+    <div class="loading-tip">正在连接 Draw.io...</div>
+    <!-- 
+        修复点 1: 去掉 configure=1 
+        修复点 2: 使用 proto=json 确保通信格式 
+        修复点 3: 使用 ui=atlas 显示完整界面，方便调试
+    -->
+    <!-- <iframe id="drawio-frame" src="https://embed.diagrams.net/?embed=1&ui=atlas&spin=1&proto=json"></iframe> -->
+    <!-- <iframe id="drawio-frame" src="https://10.254.28.3:8893/?embed=1&ui=atlas&spin=1&proto=json"></iframe> -->
+    <iframe id="drawio-frame" src="http://10.254.28.3:8890/?embed=1&ui=atlas&spin=1&proto=json"></iframe>
+</div>
+
+<script>
+    let editor;
+    const iframe = document.getElementById('drawio-frame');
+    let isUpdatingFromDiagram = false; 
+
+    // 一个包含默认矩形的初始 XML，确保视图不为空
+    const initialXML = `<mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="2" value="Hello Draw.io" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="140" y="120" width="120" height="60" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>`;
+
+    // 1. 初始化 Monaco Editor
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        editor = monaco.editor.create(document.getElementById('editor-container'), {
+            value: initialXML,
+            language: 'xml',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            wordWrap: 'on'
+        });
+
+        // 监听代码编辑器的变化 (Code -> Diagram)
+        editor.onDidChangeModelContent((e) => {
+            if (isUpdatingFromDiagram) return;
+
+            const xmlContent = editor.getValue();
+            
+            // 发送 merge 动作，尝试保留视图状态
+            // 注意：如果 xml 语法错误，draw.io 可能会忽略
+            sendToDrawio('merge', { xml: xmlContent }); 
+        });
+    });
+
+    // 2. Draw.io 通信逻辑
+    window.addEventListener('message', function(event) {
+        // 安全检查：实际生产环境建议检查 event.origin 是否为 https://embed.diagrams.net
+        if (event.source !== iframe.contentWindow) return;
+
+        // Draw.io 初始化时可能发送非 JSON 字符串，try-catch 处理
+        let msg;
+        try {
+            msg = JSON.parse(event.data);
+        } catch (e) {
+            return;
+        }
+
+        switch (msg.event) {
+            case 'init':
+                console.log('Draw.io 初始化完成');
+                // Draw.io 加载完毕，发送初始 XML
+                sendToDrawio('load', { 
+                    xml: editor ? editor.getValue() : initialXML,
+                    autosave: 1 // 开启自动保存，这样图形变动会触发 autosave 事件
+                });
+                break;
+
+            case 'autosave':
+            case 'save':
+                // 监听图形变动 (Diagram -> Code)
+                if (msg.xml) {
+                    console.log('接收到图形变更');
+                    isUpdatingFromDiagram = true;
+                    
+                    // 获取光标位置
+                    const position = editor ? editor.getPosition() : null;
+                    
+                    // 更新编辑器内容
+                    if (editor) editor.setValue(msg.xml);
+                    
+                    // 恢复光标位置
+                    if (position && editor) editor.setPosition(position);
+                    
+                    isUpdatingFromDiagram = false;
+                }
+                break;
+        }
+    });
+
+    function sendToDrawio(action, params = {}) {
+        const payload = JSON.stringify({
+            action: action,
+            ...params
+        });
+        iframe.contentWindow.postMessage(payload, '*');
+    }
+</script>
+</body>
+</html>

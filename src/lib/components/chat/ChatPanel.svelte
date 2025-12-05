@@ -1,0 +1,253 @@
+<script lang="ts">
+  import { chatHistory, currentXml, settings, type ChatMessage } from '../../stores/appStore';
+  import { llmService } from '../../services/llmService';
+  import { Send, Trash2, Loader2, Play, ArrowDownCircle, Paperclip, Sparkles, Zap, FileText, Wand2, Hammer, Info } from 'lucide-svelte';
+
+  let input = $state('');
+  let isLoading = $state(false);
+  let chatContainer: HTMLDivElement;
+  let autoScroll = $state(true);
+  let inputHeight = $state(120);
+  let isResizingInput = $state(false);
+  let showActions = $state(false);
+  let fileInput: HTMLInputElement;
+  let toastMessage = $state<string | null>(null);
+
+  function showToast(msg: string) {
+    toastMessage = msg;
+    setTimeout(() => toastMessage = null, 3000);
+  }
+
+  function startResizeInput(e: MouseEvent) {
+    isResizingInput = true;
+    window.addEventListener('mousemove', handleResizeInput);
+    window.addEventListener('mouseup', stopResizeInput);
+  }
+
+  function handleResizeInput(e: MouseEvent) {
+    if (!isResizingInput) return;
+    const newHeight = window.innerHeight - e.clientY;
+    // Clamp height between 100px and 60% of screen
+    if (newHeight > 100 && newHeight < window.innerHeight * 0.6) {
+      inputHeight = newHeight;
+    }
+  }
+
+  function stopResizeInput() {
+    isResizingInput = false;
+    window.removeEventListener('mousemove', handleResizeInput);
+    window.removeEventListener('mouseup', stopResizeInput);
+  }
+
+  // ... (keep scrollToBottom, handleSubmit, clearChat, applyCodeBlock)
+
+  function handleAction(action: string) {
+    input = action;
+    showActions = false;
+    // Focus textarea?
+  }
+
+  function handleUpload() {
+    showToast('File upload is currently in development.');
+    // fileInput.click(); // Disable actual click for now as per request
+  }
+
+  function onFileSelected(e: Event) {
+    // ... (keep existing logic if we re-enable it later, or comment it out)
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      input += `\n\n[File: ${file.name}]\n\`\`\`\n${text}\n\`\`\``;
+      showToast(`File "${file.name}" attached`);
+    };
+    reader.readAsText(file);
+  }
+</script>
+
+<div class="flex flex-col h-full bg-white text-neutral-900 relative group/chat">
+  <!-- Toast Notification -->
+  {#if toastMessage}
+    <div class="absolute top-12 left-1/2 -translate-x-1/2 bg-neutral-800 text-white text-xs px-3 py-1.5 rounded-full shadow-lg z-50 animate-in fade-in slide-in-from-top-2">
+      {toastMessage}
+    </div>
+  {/if}
+
+  <!-- Header -->
+  <div class="h-9 border-b border-neutral-200 flex items-center justify-between px-4 bg-neutral-50 shrink-0">
+    <span class="font-medium text-xs text-neutral-500 uppercase tracking-wider">AI Assistant</span>
+    <div class="flex items-center gap-1">
+      <button 
+        onclick={() => autoScroll = !autoScroll}
+        class="p-1.5 rounded transition-colors {autoScroll ? 'text-blue-600 bg-blue-50' : 'text-neutral-400 hover:bg-neutral-200'}"
+        title={autoScroll ? "Auto-scroll On" : "Auto-scroll Off"}
+      >
+        <ArrowDownCircle size={16} />
+      </button>
+      <button 
+        onclick={clearChat}
+        class="p-1.5 hover:bg-neutral-200 rounded text-neutral-400 hover:text-red-500 transition-colors"
+        title="Clear Chat"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div 
+    bind:this={chatContainer}
+    class="flex-1 overflow-y-auto p-4 space-y-4 bg-white"
+  >
+    {#if $chatHistory.length === 0}
+      <div class="text-center text-neutral-400 mt-10 text-sm">
+        <p>Ask me anything about your diagram.</p>
+        <p class="mt-2 text-xs">I can see the current XML structure.</p>
+      </div>
+    {/if}
+
+    {#each $chatHistory as msg}
+      <div class="flex flex-col gap-1 {msg.role === 'user' ? 'items-end' : 'items-start'}">
+        <div 
+          class="max-w-[90%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap shadow-sm
+          {msg.role === 'user' 
+            ? 'bg-blue-600 text-white rounded-br-none' 
+            : msg.role === 'system' 
+              ? 'bg-red-50 text-red-800 border border-red-100' 
+              : 'bg-neutral-100 text-neutral-800 border border-neutral-200 rounded-bl-none'}"
+        >
+          {msg.content}
+        </div>
+        {#if msg.role === 'assistant' && msg.content.includes('```xml')}
+           <button 
+             class="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1 font-medium ml-2"
+             onclick={() => applyCodeBlock(msg.content)}
+           >
+             <Play size={12} /> Apply to Editor
+           </button>
+        {/if}
+      </div>
+    {/each}
+    
+    {#if isLoading}
+      <div class="flex items-center gap-2 text-neutral-400 text-xs ml-2">
+        <Loader2 size={12} class="animate-spin" />
+        Thinking...
+      </div>
+    {/if}
+  </div>
+
+  <!-- Resize Handle -->
+  <div 
+    class="h-1 bg-transparent hover:bg-blue-500/50 cursor-row-resize transition-colors z-10 shrink-0 opacity-0 group-hover/chat:opacity-100"
+    onmousedown={startResizeInput}
+  ></div>
+
+  <!-- Input Area -->
+  <div 
+    class="bg-white relative shrink-0 flex flex-col p-4 pt-2"
+    style="height: {inputHeight}px"
+  >
+    <!-- Command Suggestions (Slash) -->
+    {#if input === '/'}
+      <div class="absolute bottom-16 left-4 right-4 mb-2 bg-white border border-neutral-200 rounded-xl shadow-lg overflow-hidden z-10 animate-in slide-in-from-bottom-2 ring-1 ring-black/5">
+        <div class="p-1">
+          <button class="w-full text-left px-3 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-2" onclick={() => input = '/explain '}>
+            <span class="font-mono text-xs bg-neutral-200 px-1.5 py-0.5 rounded text-neutral-600">/explain</span> Explain diagram
+          </button>
+          <button class="w-full text-left px-3 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-2" onclick={() => input = '/fix '}>
+            <span class="font-mono text-xs bg-neutral-200 px-1.5 py-0.5 rounded text-neutral-600">/fix</span> Fix issues
+          </button>
+          <button class="w-full text-left px-4 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-2" onclick={() => input = '/optimize '}>
+            <span class="font-mono text-xs bg-neutral-200 px-1.5 py-0.5 rounded text-neutral-600">/optimize</span> Optimize XML
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <div class="flex-1 flex flex-col relative bg-neutral-50 border border-neutral-200 rounded-2xl focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all shadow-sm hover:border-neutral-300">
+      <textarea
+        bind:value={input}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+        placeholder="Type a message or / for commands..."
+        class="flex-1 w-full bg-transparent border-none focus:ring-0 p-3 text-sm text-neutral-900 placeholder:text-neutral-400 resize-none focus:outline-none"
+      ></textarea>
+      
+      <!-- Bottom Toolbar -->
+      <div class="flex items-center justify-between px-2 pb-2 mt-auto">
+        <div class="flex items-center gap-1">
+          <!-- Actions Menu Button Wrapper -->
+          <div class="relative">
+            <button 
+              class="p-2 text-neutral-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors {showActions ? 'bg-blue-50 text-blue-600' : ''}"
+              title="Actions"
+              onclick={() => showActions = !showActions}
+            >
+              <Zap size={18} />
+            </button>
+            
+            <!-- Actions Menu (Anchored to button) -->
+            {#if showActions}
+              <div class="absolute bottom-full left-0 mb-2 bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden z-20 w-56 animate-in slide-in-from-bottom-2 ring-1 ring-black/5">
+                <div class="p-1">
+                  <button class="w-full text-left px-3 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-3 transition-colors" onclick={() => handleAction('Create a diagram of ')}>
+                    <FileText size={16} class="text-blue-500" />
+                    <span>Create Diagram...</span>
+                  </button>
+                  <button class="w-full text-left px-3 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-3 transition-colors" onclick={() => handleAction('Beautify this diagram by ')}>
+                    <Wand2 size={16} class="text-purple-500" />
+                    <span>Beautify...</span>
+                  </button>
+                  <button class="w-full text-left px-3 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-3 transition-colors" onclick={() => handleAction('Refactor this diagram to ')}>
+                    <Hammer size={16} class="text-orange-500" />
+                    <span>Refactor...</span>
+                  </button>
+                  <button class="w-full text-left px-3 py-2 hover:bg-neutral-100 rounded-lg text-sm text-neutral-700 flex items-center gap-3 transition-colors" onclick={() => handleAction('Explain this diagram')}>
+                    <Info size={16} class="text-green-500" />
+                    <span>Explain Diagram</span>
+                  </button>
+                </div>
+              </div>
+              <!-- Backdrop to close (fixed to viewport) -->
+              <div class="fixed inset-0 z-10" onclick={() => showActions = false}></div>
+            {/if}
+          </div>
+
+          <button 
+            class="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200 rounded-lg transition-colors"
+            title="Upload file (Text/XML)"
+            onclick={handleUpload}
+          >
+            <Paperclip size={18} />
+          </button>
+          <input 
+            type="file" 
+            bind:this={fileInput} 
+            class="hidden" 
+            accept=".xml,.txt,.md,.json"
+            onchange={onFileSelected}
+          />
+        </div>
+
+        <button
+          onclick={handleSubmit}
+          disabled={!input.trim() || isLoading}
+          class="p-2 bg-blue-600 rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 transition-all shadow-sm hover:shadow active:scale-95"
+        >
+          {#if isLoading}
+            <Loader2 size={18} class="animate-spin" />
+          {:else}
+            <Send size={18} />
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
