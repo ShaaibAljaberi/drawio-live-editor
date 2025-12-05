@@ -56,7 +56,7 @@
         <Bot size={16} /> LLM Configuration
       </button>
       <button 
-        class="py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 {activeTab === 'drawio' ? 'border-orange-500 text-orange-600' : 'border-transparent text-neutral-500 hover:text-neutral-700'}"
+        class="py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 {activeTab === 'drawio' ? 'border-blue-500 text-blue-600' : 'border-transparent text-neutral-500 hover:text-neutral-700'}"
         onclick={() => activeTab = 'drawio'}
       >
         <PenTool size={16} /> Draw.io Configuration

@@ -5,10 +5,11 @@
   import ChatPanel from './lib/components/chat/ChatPanel.svelte';
   import SettingsDialog from './lib/components/settings/SettingsDialog.svelte';
   import ToastContainer from './lib/components/ui/ToastContainer.svelte';
-  import { Settings, MessageSquare, PanelLeft, PanelRight } from 'lucide-svelte';
+  import { Settings, MessageSquare, PanelLeft, PanelRight, Code } from 'lucide-svelte';
   import { isChatOpen } from './lib/stores/appStore';
 
   let showSettings = $state(false);
+  let showEditor = $state(false);
   
   // Panel widths in percentage
   let leftWidth = $state(40); // Diagram
@@ -74,6 +75,16 @@
       >
         <Settings size={20} />
       </button>
+      
+      <button 
+        onclick={() => showEditor = !showEditor}
+        class="p-2 hover:bg-neutral-100 rounded-md transition-colors {showEditor ? 'text-blue-600 bg-blue-50' : 'text-neutral-600'}"
+        aria-label="Toggle XML Editor"
+        title={showEditor ? "Hide XML Editor" : "Show XML Editor"}
+      >
+        <Code size={20} />
+      </button>
+
       <button 
         onclick={() => $isChatOpen = !$isChatOpen}
         class="p-2 hover:bg-neutral-100 rounded-md transition-colors {$isChatOpen ? 'text-blue-600 bg-blue-50' : 'text-neutral-600'}"
@@ -88,7 +99,11 @@
   <div class="flex-1 overflow-hidden flex relative">
     
     <!-- LEFT PANEL: Diagram -->
-    <div style="width: {leftWidth}%" class="flex flex-col min-w-[200px] relative group {isDraggingLeft || isDraggingRight ? 'pointer-events-none select-none' : ''}">
+    <!-- When editor is hidden, this becomes flex-1 to fill space. When editor is shown, it uses fixed percentage width. -->
+    <div 
+      style={showEditor ? `width: ${leftWidth}%` : ''} 
+      class="{showEditor ? 'flex-none' : 'flex-1'} flex flex-col min-w-[200px] relative group {isDraggingLeft || isDraggingRight ? 'pointer-events-none select-none' : ''}"
+    >
        <div class="h-9 bg-neutral-50 border-b border-neutral-200 flex items-center px-4 text-xs font-medium text-neutral-500 uppercase tracking-wider select-none">
          <PanelLeft size={14} class="mr-2" /> Diagram
        </div>
@@ -97,22 +112,23 @@
        </div>
     </div>
 
-    <!-- RESIZER 1 -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div 
-      class="w-1 bg-neutral-100 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 z-20 flex items-center justify-center relative"
-      onmousedown={startResizeLeft}
-    >
-      <div class="w-[1px] h-full bg-neutral-200"></div>
-    </div>
+    {#if showEditor}
+      <!-- RESIZER 1 -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div 
+        class="w-1 bg-neutral-100 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 z-20 flex items-center justify-center relative"
+        onmousedown={startResizeLeft}
+      >
+        <div class="w-[1px] h-full bg-neutral-200"></div>
+      </div>
 
-    <!-- CENTER PANEL: Editor -->
-    <div class="flex-1 flex flex-col min-w-[200px] overflow-hidden {isDraggingLeft || isDraggingRight ? 'pointer-events-none select-none' : ''}">
-
-       <div class="flex-1 relative bg-white">
-         <MonacoEditor />
-       </div>
-    </div>
+      <!-- CENTER PANEL: Editor -->
+      <div class="flex-1 flex flex-col min-w-[200px] overflow-hidden {isDraggingLeft || isDraggingRight ? 'pointer-events-none select-none' : ''}">
+         <div class="flex-1 relative bg-white">
+           <MonacoEditor />
+         </div>
+      </div>
+    {/if}
 
     <!-- RESIZER 2 -->
     {#if $isChatOpen}
