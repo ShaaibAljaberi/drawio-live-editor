@@ -8,7 +8,13 @@ export interface ChatMessage {
 
 export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: string) => void): Promise<string> {
     const appSettings = get(settings);
-    const { baseUrl, apiKey, model, temperature, maxTokens } = appSettings.llm;
+    const activeProfile = appSettings.llmProfiles.find(p => p.id === appSettings.activeProfileId);
+
+    if (!activeProfile) {
+        throw new Error('No active LLM profile found');
+    }
+
+    const { baseUrl, apiKey, model, temperature, maxTokens } = activeProfile;
 
     const requestPayload = {
         model,
@@ -92,6 +98,36 @@ export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: stri
     }
 }
 
+export async function testConnection(profile: { baseUrl: string; apiKey: string; model: string }): Promise<boolean> {
+    try {
+        const { baseUrl, apiKey, model } = profile;
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model,
+                messages: [{ role: 'user', content: 'Hi' }],
+                max_tokens: 5
+            }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[LLM Test] Error:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('[LLM Test] Connection failed:', error);
+        throw error;
+    }
+}
+
 export const llmService = {
-    sendMessage
+    sendMessage,
+    testConnection
 };
