@@ -24,6 +24,9 @@ export interface AppSettings {
     drawio: {
         baseUrl: string;
     };
+    preferences: {
+        autoApplyDrawioSnippets: boolean;
+    };
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -38,13 +41,24 @@ const DEFAULT_SETTINGS: AppSettings = {
     drawio: {
         baseUrl: 'https://embed.diagrams.net',
     },
+    preferences: {
+        autoApplyDrawioSnippets: false,
+    },
 };
 
 // Load settings from localStorage if available
-const savedSettings = localStorage.getItem('appSettings');
-export const settings = writable<AppSettings>(
-    savedSettings ? JSON.parse(savedSettings) : DEFAULT_SETTINGS
-);
+const savedSettingsStr = localStorage.getItem('appSettings');
+const savedSettings = savedSettingsStr ? JSON.parse(savedSettingsStr) : {};
+
+const mergedSettings: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    ...savedSettings,
+    llm: { ...DEFAULT_SETTINGS.llm, ...savedSettings.llm },
+    drawio: { ...DEFAULT_SETTINGS.drawio, ...savedSettings.drawio },
+    preferences: { ...DEFAULT_SETTINGS.preferences, ...savedSettings.preferences },
+};
+
+export const settings = writable<AppSettings>(mergedSettings);
 
 // Subscribe to settings changes to save to localStorage
 settings.subscribe((value) => {
