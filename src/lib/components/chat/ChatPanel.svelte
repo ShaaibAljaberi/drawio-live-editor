@@ -24,6 +24,8 @@
   import { marked } from "marked";
   import DOMPurify from "dompurify";
 
+  import ConfirmationDialog from "../ui/ConfirmationDialog.svelte";
+
   let input = $state("");
   let isLoading = $state(false);
   let chatContainer: HTMLDivElement;
@@ -31,6 +33,7 @@
   let inputHeight = $state(120);
   let isResizingInput = $state(false);
   let showActions = $state(false);
+  let showClearConfirm = $state(false);
   let fileInput: HTMLInputElement;
 
   function startResizeInput(e: MouseEvent) {
@@ -148,9 +151,13 @@
   }
 
   function clearChat() {
-    if (confirm("Clear all chat messages?")) {
-      chatHistory.set([]);
-    }
+    showClearConfirm = true;
+  }
+
+  function handleConfirmClear() {
+    chatHistory.set([]);
+    showClearConfirm = false;
+    toastStore.add("Chat history cleared", "success");
   }
 
   function applyCodeBlock(content: string) {
@@ -196,6 +203,15 @@
     }
   }
 </script>
+
+<ConfirmationDialog
+  bind:open={showClearConfirm}
+  title="Clear Chat History"
+  message="Are you sure you want to clear all chat messages? This action cannot be undone."
+  confirmText="Clear Messages"
+  variant="danger"
+  on:confirm={handleConfirmClear}
+/>
 
 <div class="flex flex-col h-full bg-white text-neutral-900 relative group/chat">
   <!-- Header -->
