@@ -54,8 +54,8 @@
     window.removeEventListener("mouseup", stopResizeInput);
   }
 
-  function scrollToBottom() {
-    if (autoScroll && chatContainer) {
+  function scrollToBottom(force: boolean = false) {
+    if ((autoScroll || force) && chatContainer) {
       setTimeout(() => {
         chatContainer.scrollTop = chatContainer.scrollHeight;
       }, 0);
@@ -75,7 +75,7 @@
     const userInput = input;
     input = "";
     isLoading = true;
-    scrollToBottom();
+    scrollToBottom(true);
 
     try {
       // Build messages array in OpenAI format
@@ -92,21 +92,44 @@
         },
       ];
 
-      const response = await llmService.sendMessage(messages, (chunk) => {
-        // Handle streaming chunks if needed
-      });
-
+      // Create placeholder assistant message immediately
+      const assistantMsgId = Date.now();
       const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: response,
-        timestamp: Date.now(),
+        role: "assistant", // Type assertion if needed, but 'assistant' is valid
+        content: "",
+        timestamp: assistantMsgId,
       };
 
       chatHistory.update((h) => [...h, assistantMessage]);
+      scrollToBottom(true);
+
+      let fullContent = "";
+
+      await llmService.sendMessage(messages, (chunk) => {
+        fullContent += chunk;
+
+        // Update the last message (which is our assistant message)
+        chatHistory.update((h) => {
+          const newHistory = [...h];
+          const lastMsg = newHistory[newHistory.length - 1];
+          // Verify it's the right one (optional but safe)
+          if (
+            lastMsg.role === "assistant" &&
+            lastMsg.timestamp === assistantMsgId
+          ) {
+            lastMsg.content = fullContent;
+          }
+          return newHistory;
+        });
+        scrollToBottom();
+      });
+
+      // Final update is mostly redundant if chunks handled it, but good for consistency
+      // The message is already in history, just updated in-place via the chunks logic.
       scrollToBottom();
 
       if ($settings.preferences?.autoApplyDrawioSnippets) {
-        applyCodeBlock(response);
+        applyCodeBlock(fullContent);
       }
     } catch (error) {
       const errorMessage: ChatMessage = {
@@ -127,7 +150,7 @@
   }
 
   function applyCodeBlock(content: string) {
-    const xmlMatch = content.match(/```xml\n([\s\S]*?)\n```/);
+    const xmlMatch = content.match(/```xml\s*([\s\S]*?)\s*```/);
     if (xmlMatch) {
       currentXml.set(xmlMatch[1]);
       toastStore.add("XML applied to editor", "success");
@@ -210,7 +233,7 @@
       </div>
     {/if}
 
-    {#each $chatHistory as msg}
+    {#each $chatHistory as msg, i}
       <div
         class="flex flex-col gap-1 {msg.role === 'user'
           ? 'items-end'
@@ -233,7 +256,7 @@
             {msg.content}
           {/if}
         </div>
-        {#if msg.role === "assistant" && msg.content.includes("```xml")}
+        {#if msg.role === "assistant" && msg.content.includes("```xml") && (!isLoading || i !== $chatHistory.length - 1)}
           <button
             class="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1 font-medium ml-2"
             onclick={() => applyCodeBlock(msg.content)}
