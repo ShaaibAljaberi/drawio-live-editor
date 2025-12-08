@@ -6,7 +6,7 @@ export interface ChatMessage {
     content: string;
 }
 
-export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: string) => void): Promise<string> {
+export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: string) => void, xmlContext?: string): Promise<string> {
     const appSettings = get(settings);
     const activeProfile = appSettings.llmProfiles.find(p => p.id === appSettings.activeProfileId);
 
@@ -14,11 +14,25 @@ export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: stri
         throw new Error('No active LLM profile found');
     }
 
-    const { baseUrl, apiKey, model, temperature, maxTokens } = activeProfile;
+    const { baseUrl, apiKey, model, temperature, maxTokens, systemPrompt } = activeProfile;
+
+    // Construct valid system message
+    let finalSystemInfo = systemPrompt;
+    if (xmlContext) {
+        finalSystemInfo += `\n\Here is the current diagram XML:\n\`\`\`xml\n${xmlContext}\n\`\`\``;
+    }
+
+    const systemMessage: ChatMessage = {
+        role: 'system',
+        content: finalSystemInfo
+    };
+
+    // Prepare full message list with system prompt at the start
+    const finalMessages = [systemMessage, ...messages];
 
     const requestPayload = {
         model,
-        messages,
+        messages: finalMessages,
         temperature,
         max_tokens: maxTokens,
         stream: true,
@@ -61,13 +75,29 @@ export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: stri
             throw new Error('Response body is null');
         }
 
+        console.log('[LLM Service] Stream started');
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let fullContent = '';
+        let streamFinished = false;
 
         while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+            let done, value;
+            try {
+                ({ done, value } = await reader.read());
+            } catch (readError) {
+                console.error('[LLM Service] Stream reading error (Network interrupted?):', readError);
+                throw readError;
+            }
+
+            if (done) {
+                if (!streamFinished) {
+                    console.warn('[LLM Service] Stream ended without explicit finish_reason or [DONE] signal. (Possible interruption)');
+                } else {
+                    console.log('[LLM Service] Stream completed successfully');
+                }
+                break;
+            }
 
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n').filter(line => line.trim() !== '');
@@ -75,11 +105,27 @@ export async function sendMessage(messages: ChatMessage[], onChunk: (chunk: stri
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const data = line.slice(6);
-                    if (data === '[DONE]') continue;
+                    if (data === '[DONE]') {
+                        streamFinished = true;
+                        continue;
+                    }
 
                     try {
                         const parsed = JSON.parse(data);
-                        const content = parsed.choices[0]?.delta?.content || '';
+                        const delta = parsed.choices[0]?.delta;
+                        const finishReason = parsed.choices[0]?.finish_reason;
+
+                        if (finishReason) {
+                            console.log(`[LLM Service] Stream finished with reason: ${finishReason}`);
+                            streamFinished = true;
+                            if (finishReason === 'length') {
+                                console.warn('[LLM Service] Warning: Output truncated due to max_tokens limit.');
+                            } else if (finishReason !== 'stop') {
+                                console.warn(`[LLM Service] Warning: Finish reason is ${finishReason}`);
+                            }
+                        }
+
+                        const content = delta?.content || '';
                         if (content) {
                             fullContent += content;
                             onChunk(content);

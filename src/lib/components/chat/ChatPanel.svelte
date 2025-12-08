@@ -78,21 +78,21 @@
     scrollToBottom(true);
 
     try {
-      // Build messages array in OpenAI format
-      const messages: ChatMessage[] = [
-        {
-          role: "system",
-          content: `You are an AI assistant helping with Draw.io diagrams. Here is the current diagram XML:\n\`\`\`xml\n${$currentXml}\n\`\`\`\n\nPlease help the user with their request.`,
-          timestamp: Date.now(),
-        },
+      // 对于绘图的应用，为避免上下文超过模型上下文长度限制，暂时不处理history
+      // const messages = $chatHistory
+      //   .filter((msg) => msg.role === "user" || msg.role === "assistant")
+      //   .map((msg) => ({
+      //     role: msg.role,
+      //     content: msg.content,
+      //   }));
+
+      const messages: { role: "user"; content: string }[] = [
         {
           role: "user",
           content: userInput,
-          timestamp: Date.now(),
         },
       ];
 
-      // Create placeholder assistant message immediately
       const assistantMsgId = Date.now();
       const assistantMessage: ChatMessage = {
         role: "assistant", // Type assertion if needed, but 'assistant' is valid
@@ -105,24 +105,28 @@
 
       let fullContent = "";
 
-      await llmService.sendMessage(messages, (chunk) => {
-        fullContent += chunk;
+      await llmService.sendMessage(
+        messages,
+        (chunk) => {
+          fullContent += chunk;
 
-        // Update the last message (which is our assistant message)
-        chatHistory.update((h) => {
-          const newHistory = [...h];
-          const lastMsg = newHistory[newHistory.length - 1];
-          // Verify it's the right one (optional but safe)
-          if (
-            lastMsg.role === "assistant" &&
-            lastMsg.timestamp === assistantMsgId
-          ) {
-            lastMsg.content = fullContent;
-          }
-          return newHistory;
-        });
-        scrollToBottom();
-      });
+          // Update the last message (which is our assistant message)
+          chatHistory.update((h) => {
+            const newHistory = [...h];
+            const lastMsg = newHistory[newHistory.length - 1];
+            // Verify it's the right one (optional but safe)
+            if (
+              lastMsg.role === "assistant" &&
+              lastMsg.timestamp === assistantMsgId
+            ) {
+              lastMsg.content = fullContent;
+            }
+            return newHistory;
+          });
+          scrollToBottom();
+        },
+        $currentXml,
+      );
 
       // Final update is mostly redundant if chunks handled it, but good for consistency
       // The message is already in history, just updated in-place via the chunks logic.
@@ -229,7 +233,7 @@
     {#if $chatHistory.length === 0}
       <div class="text-center text-neutral-400 mt-10 text-sm">
         <p>Ask me anything about your diagram.</p>
-        <p class="mt-2 text-xs">I can see the current XML structure.</p>
+        <p class="mt-2 text-xs">I can see the current diagram structure.</p>
       </div>
     {/if}
 
